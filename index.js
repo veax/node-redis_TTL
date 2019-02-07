@@ -103,21 +103,29 @@ app.put('/:id', (req, res) => {
     // on put we send data also on both master and slave servers
     var timestamp = Math.floor(Date.now()/1000);
     var id = req.params.id;
-    // hmset owerrite values if they already exists in the hash, if key doesn't
-    // exist, a new key holding a hash is created
-    slave.hmset(id, ['data', req.body.data, 'timestamp', timestamp], (err, reply) => {
-        if (err) {
-            console.log(err);
-        }
-        console.log(reply);
-    })
-    master.hmset(id, ['data', req.body.data], (err, reply) => {
-        if (err) {
-            console.log(err);
-        }
-        console.log(reply);
-    })
-    res.redirect('/');
+    //  check for invalid body:
+    if (req.body.data && req.body.data != null){
+        // hmset owerrite values if they already exists in the hash, if key doesn't
+        // exist, a new key holding a hash is created
+        slave.hmset(id, ['data', req.body.data, 'timestamp', timestamp], (err, reply) => {
+            if (err) {
+                console.log(err);
+            }
+            console.log(reply);
+        })
+        master.hmset(id, ['data', req.body.data], (err, reply) => {
+            if (err) {
+                console.log(err);
+            }
+            console.log(reply);
+        })
+        res.redirect('/');
+    }
+    else {
+        res.status(400);
+        res.send("Invalid body");
+    }
+    
 });
 
 
