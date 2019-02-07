@@ -1,3 +1,4 @@
+const fn = require('./functions');  // import functions
 const redis = require('redis');
 const express = require('express');
 const app = express();
@@ -16,18 +17,10 @@ var slave = redis.createClient();  // port 6379 by default
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({extended: false}));
 
-function server_connect(name, port) {
-    name.on('connect', function() {
-        console.log(`Redis connected on port ${port}`);
-    });
-    name.on('error', function (err) {
-        console.log('Something went wrong ' + err);
-    });
-}
 
 // connect to redis 
-server_connect(master, '6380');
-server_connect(slave, '6379');
+fn.server_connect(master, '6380');
+fn.server_connect(slave, '6379');
 
 // running client to query redis
 app.listen(3000, () => {
@@ -43,16 +36,16 @@ app.get('/', (req, res) => {
 app.get('/:id', (req, res) => {
     var id = req.params.id;
     // looking for data from cache
-    getDataFromCache(slave, id).then((data) => {
+    fn.getDataFromCache(slave, id).then((data) => {
         // check if ttl is expired
         var expired_time = Math.floor(Date.now()/1000) - data.timestamp;
         if (expired_time >= ttl) {
             console.log("ttl expired - fetch from master...")
-            getDataFromMaster(master, id)
+            fn.getDataFromMaster(master, id)
             .then((data) => {
                 // then update cache and return data to user
-                updateCache(id);
-                returnData(data, ttl, res);
+                fn.updateCache(slave, id);
+                fn.returnData(data, ttl, res);
             })
             .catch((err) => {  // error if no key found on a master
                 res.status(404);
@@ -61,15 +54,15 @@ app.get('/:id', (req, res) => {
         }
         else {
              // else return data to user from cache
-            returnData(data, ttl - expired_time, res);
+            fn.returnData(data, ttl - expired_time, res);
         }
     })
     .catch(() => {  // no object in cache
-        getDataFromMaster(master, id)
+        fn.getDataFromMaster(master, id)
         .then((data) => {
             // then update cache and return data to user
-            updateCache(id);
-            returnData(data, ttl, res);
+            fn.updateCache(slave, id);
+            fn.returnData(data, ttl, res);
         })
         .catch(() => {  // error if no key found on a master
             res.status(404);
@@ -95,7 +88,7 @@ app.post('/:id', (req, res) => {
         }
         console.log(reply);
     })
-        res.redirect('/');
+    res.redirect('/');
 });
 
 // update or create object with key passed in url
@@ -125,56 +118,6 @@ app.put('/:id', (req, res) => {
         res.status(400);
         res.send("Invalid body");
     }
-    
 });
-
-
-function getDataFromCache(server, id) {
-    return new Promise((resolve, reject) => {
-        server.hgetall(id, (err, obj) => {
-            if (!obj) {
-                console.log("data with this id don't exist in cache");
-                return reject();  
-            }
-            console.log("fetch from cache...")
-            return resolve(obj);           
-        })
-    })
-}
-
-function getDataFromMaster(server, id) {
-    return new Promise((resolve, reject) => {
-        server.hgetall(id, (err, obj) => {
-            if (!obj) {
-                console.log("data with this id don't exist on master")
-                return reject();
-            }
-            console.log("fetch from master...")
-            return resolve(obj);
-        })
-    })
-}
-
-function updateCache(id) {
-    return new Promise((resolve, reject) => {
-        // then update data on cache
-        slave.hmset(id, ['timestamp', Math.floor(Date.now()/1000)], (err, reply) => {
-            if (err) {
-                console.log(err);
-                return reject();
-            }
-            console.log(reply);
-        })
-        return resolve();
-    })
-}
-
-function returnData(data, ttl_time, res) {
-    // then return data to user
-    res.setHeader('ttl', ttl_time); // send refreshed ttl in seconds in headers
-    res.status(200);
-    var returnedJson = {"data": data.data};
-    res.send(returnedJson); 
-}
 
 
