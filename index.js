@@ -48,53 +48,28 @@ app.get('/:id', (req, res) => {
         var expired_time = Math.floor(Date.now()/1000) - data.timestamp;
         if (expired_time >= ttl) {
             console.log("ttl expired - fetch from master...")
-            getDataFromMaster(master, id).then(data => {
-                // then update data on cache
-                slave.hmset(id, ['timestamp', Math.floor(Date.now()/1000)], (err, reply) => {
-                    if (err) {
-                        console.log(err);
-                    }
-                    console.log(reply);
-                })
-            })
+            getDataFromMaster(master, id)
             .then((data) => {
-                // then return data to user
-                res.setHeader('ttl', ttl); // send refreshed ttl in seconds in headers
-                res.status(200);
-                var returnedJson = {"data": data.data};
-                res.send(returnedJson); 
+                // then update cache and return data to user
+                updateCache(id);
+                returnData(data, ttl, res);
             })
-            .catch(() => {  // error if no key found on a master
+            .catch((err) => {  // error if no key found on a master
                 res.status(404);
                 res.send("key not found");
             })
         }
         else {
              // else return data to user from cache
-            res.setHeader('ttl', ttl - expired_time); // send ttl in seconds in headers
-            res.status(200);
-            var returnedJson = {"data": data.data};
-            res.send(returnedJson);    // send only data, without timestamp  
-            return;
+            returnData(data, ttl - expired_time, res);
         }
-       
     })
     .catch(() => {  // no object in cache
-        getDataFromMaster(master, id).then(data => {
-            // update data on cache
-            slave.hmset(id, ['timestamp', Math.floor(Date.now()/1000)], (err, reply) => {
-                if (err) {
-                    console.log(err);
-                }
-                console.log(reply);
-            })
-        })
+        getDataFromMaster(master, id)
         .then((data) => {
-            // then return data to user
-            res.setHeader('ttl', ttl); // send refreshed ttl in seconds in headers
-            res.status(200);
-            var returnedJson = {"data": data.data};
-            res.send(returnedJson); 
+            // then update cache and return data to user
+            updateCache(id);
+            returnData(data, ttl, res);
         })
         .catch(() => {  // error if no key found on a master
             res.status(404);
@@ -128,7 +103,6 @@ app.put('/:id', (req, res) => {
     // on put we send data also on both master and slave servers
     var timestamp = Math.floor(Date.now()/1000);
     var id = req.params.id;
-    console.log(req.body.data);
     // hmset owerrite values if they already exists in the hash, if key doesn't
     // exist, a new key holding a hash is created
     slave.hmset(id, ['data', req.body.data, 'timestamp', timestamp], (err, reply) => {
@@ -171,6 +145,28 @@ function getDataFromMaster(server, id) {
             return resolve(obj);
         })
     })
+}
+
+function updateCache(id) {
+    return new Promise((resolve, reject) => {
+        // then update data on cache
+        slave.hmset(id, ['timestamp', Math.floor(Date.now()/1000)], (err, reply) => {
+            if (err) {
+                console.log(err);
+                return reject();
+            }
+            console.log(reply);
+        })
+        return resolve();
+    })
+}
+
+function returnData(data, ttl_time, res) {
+    // then return data to user
+    res.setHeader('ttl', ttl_time); // send refreshed ttl in seconds in headers
+    res.status(200);
+    var returnedJson = {"data": data.data};
+    res.send(returnedJson); 
 }
 
 
