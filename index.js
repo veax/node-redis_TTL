@@ -59,7 +59,8 @@ app.get('/:id', (req, res) => {
         //console.log(data.data);
         res.setHeader('ttl', ttl); // send ttl in seconds in headers
         res.status(200);
-        res.send(data.data);    // send only data, without timestamp  
+        var returnedJson = {"data": data.data};
+        res.send(returnedJson);    // send only data, without timestamp  
     })
     .catch(() => {
         res.setHeader('ttl', ttl);
@@ -69,6 +70,7 @@ app.get('/:id', (req, res) => {
     
 });
 
+// generate object string for key value 
 app.post('/:id', (req, res) => {
     // on post we send data also on both master and slave servers
     var timestamp = Date.now() + (ttl*1000);
@@ -88,6 +90,7 @@ app.post('/:id', (req, res) => {
         res.redirect('/');
 });
 
+// update or create object with key value
 app.put('/:id', (req, res) => {
     // on put we send data also on both master and slave servers
     var timestamp = Date.now() + (ttl*1000);
@@ -95,19 +98,19 @@ app.put('/:id', (req, res) => {
     console.log(req.body.data);
     // hmset owerrite values if they already exists in the hash, if key doesn't
     // exist, a new key holding a hash is created
-    // slave.hmset(id, ['data', `some basic data for object with id: ${id} : ${req.body}`, 'timestamp', timestamp], (err, reply) => {
-    //     if (err) {
-    //         console.log(err);
-    //     }
-    //     console.log(reply);
-    // })
-    // master.hmset(id, ['data', `some basic data for object with id: ${id} : ${req.body}`, 'timestamp', timestamp], (err, reply) => {
-    //     if (err) {
-    //         console.log(err);
-    //     }
-    //     console.log(reply);
-    // })
-    //     res.redirect('/');
+    slave.hmset(id, ['data', `some basic data for object with id: ${id} : ${req.body}`, 'timestamp', timestamp], (err, reply) => {
+        if (err) {
+            console.log(err);
+        }
+        console.log(reply);
+    })
+    master.hmset(id, ['data', `some basic data for object with id: ${id} : ${req.body}`, 'timestamp', timestamp], (err, reply) => {
+        if (err) {
+            console.log(err);
+        }
+        console.log(reply);
+    })
+        res.redirect('/');
 });
 
 
